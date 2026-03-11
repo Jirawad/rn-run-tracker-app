@@ -1,7 +1,11 @@
+import { supabase } from "@/services/supabase";
 import { Ionicons } from "@expo/vector-icons";
+import { decode } from "base64-arraybuffer";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +18,8 @@ import {
 } from "react-native";
 
 export default function Add() {
+  const router = useRouter();
+
   // สร้าง state สำหรับเก็บข้อมูลที่กรอก
   const [location, setLocation] = useState("");
   const [distance, setDistance] = useState("");
@@ -42,6 +48,54 @@ export default function Add() {
       setImage(result.assets[0].uri);
       setBase64Image(result.assets[0].base64 || null); // เก็บข้อมูล Base64 ใน state แยกต่างหาก
     }
+  };
+
+  // ฟังก์ชันสำหรับบันทึกข้อมูลใช้ป้อน/เลือกไปไว้ที่ Supabase
+  const handleSaveToSupabase = async () => {
+    //Validation, location, distance, image
+    if (!location || !distance || !image) {
+      Alert.alert("คำเตือน", "กรุณากรอกข้อมูลให้ครบและเลือกรูปภาพด้วย");
+      return;
+    }
+
+    //อัปโหลดรูปไปยัง Bucket -> Supabase -> Storage
+    //ตัวแปรเก็บ url ของรูปที่อับโหลด
+    let image_url = null; // ตัวแปรเก็บ URL ของรูปที่อัปโหลด
+    const fileName = `img_${Date.now()}.jpg`; //ตั้งชื่อไฟล์ที่จะอัปโหลด
+    const { error: uploadError } = await supabase.storage
+      .from("run_bk")
+      .upload(fileName, decode(base64Image!), {
+        contentType: "image/jpeg",
+      });
+
+    if (uploadError) throw uploadError; //ตรวจสอบการอัปโหลดรูปภาพ
+
+    //เอา url ของรูปที่ storage มากำหนดให้กับตัวแปรดเพื่อใช้บันทึกลงตาราง
+    image_url = await supabase.storage.from("run_bk").getPublicUrl(fileName)
+      .data.publicUrl;
+
+    //บันทึกข้อมูลที่กรอกไปยัง Table -> Database -> Supabase==============
+    const { error: insertError } = await supabase.from("runs").insert([
+      {
+        location: location,
+        distance: distance,
+        time_of_day: timeOfDay,
+        run_date: new Date().toISOString().split("T")[0], // เอาแต่ ปี เดือน วัน ไม่เอาเวลา
+        image_url: image_url,
+      },
+    ]);
+
+    if (insertError) {
+      Alert.alert(
+        "เกิดข้อผิดพลาด",
+        "ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง",
+      );
+      return;
+    }
+
+    // ถ้าบันทึกสำเร็จแสดงข้อความแจ้ง และเปิดไปที่หน้า Run
+    Alert.alert("สำเร็จ", "บันทึกข้อมูลเรียบร้อยแล้ว");
+    router.back();
   };
 
   return (
@@ -118,7 +172,7 @@ export default function Add() {
         </TouchableOpacity>
 
         {/* ปุ่มบันทึก */}
-        <TouchableOpacity style={styles.saveBtn}>
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSaveToSupabase}>
           <Text style={{ fontFamily: "Kanit_700Bold", color: "white" }}>
             บันทึกข้อมูล
           </Text>

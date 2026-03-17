@@ -8,7 +8,7 @@ export default function Index() {
   // หน้าจอโหลด (Splash Screen) 3 วินาที
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.replace("/run");
+      router.replace("/login");
     }, 3000);
 
     return () => clearTimeout(timer);

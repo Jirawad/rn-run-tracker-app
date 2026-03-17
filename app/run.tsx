@@ -22,8 +22,19 @@ export default function Run() {
 
   // ฟังก์ชันสำหรับดึงข้อมูลจาก Supabase
   const fetchRuns = async () => {
-    //ดึง
-    const { data, error } = await supabase.from("runs").select("*");
+    // 1. ดึงข้อมูล User ปัจจุบันที่ล็อกอินอยู่
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return; // ถ้าไม่มี user ให้หยุดทำงาน
+
+    // 2. ดึงข้อมูลจากตาราง runs โดยเลือกเฉพาะอันที่มี user_id ตรงกับเรา
+    const { data, error } = await supabase
+      .from("runs")
+      .select("*")
+      .eq("user_id", user.id); // กรองข้อมูล
+
     //ตรวจสอบว่ามี error หรือไม่
     if (error) {
       Alert.alert("คำเตือน", "เกิดข้อผิดพลาดในการดึงข้อมูลจาก Supabase");
@@ -31,6 +42,16 @@ export default function Run() {
     }
     //กำหนดข้อมูลที่ดึงมาให้กับ state
     setRuns(data as RunsType[]);
+  };
+
+  // ฟังก์ชันสำหรับออกจากระบบ
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      Alert.alert("ข้อผิดพลาด", "ไม่สามารถออกจากระบบได้");
+    } else {
+      router.replace("/login"); // ออกสำเร็จให้เด้งไปหน้า login
+    }
   };
 
   //เรียกใช้ฟังก์ชันดึงข้อมูล
@@ -75,6 +96,11 @@ export default function Run() {
 
   return (
     <View style={styles.container}>
+      {/* ปุ่ม Logout มุมขวาบน */}
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
+      </TouchableOpacity>
+
       {/* รูปภาพ */}
       <Image source={runimg} style={styles.imglogo} />
 
@@ -184,6 +210,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     elevation: 3,
+    padding: 10,
+  },
+  // สไตล์ปุ่ม Logout
+  logoutBtn: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 10,
     padding: 10,
   },
 });
